@@ -2,9 +2,9 @@
   "name": "autobrightness",
   "version": "1.0.0",
   "description": "",
-  "main": "main.js",
+  "main": "main_v2.js",
   "scripts": {
-    "start": "node main.js"
+    "start": "node main_v2.js"
   },
   "keywords": [],
   "author": "",

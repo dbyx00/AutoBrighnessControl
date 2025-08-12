@@ -7,9 +7,6 @@ void setup() {
   Serial.begin(9600);
   Wire.begin();
   lightMeter.begin();
-
-  delay(1000);
-  Serial.println("SENSOR_LUZ_BH1750"); // Firma de identificación
 }
 
 void loop() {

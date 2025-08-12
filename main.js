@@ -1,110 +1,92 @@
 import { SerialPort } from 'serialport';
 import { ReadlineParser } from '@serialport/parser-readline';
+import { delay } from './utils.js';
 
 import { smoothSetBrightness } from './brightnessControl.js';
 
 let activePort = null;
+let activeParser = null;
 let reconnectTimeout = null;
+
+const SENSOR_VENDOR_ID = '';
+const SENSOR_PRODUCT_ID = '';
 
 async function findSensorPort() {
 
     console.log(' BOOT · Buscando sensor...');
-    
+
     const ports = await SerialPort.list();
-    
-    for (const portInfo of ports) {
-        try {
-            const testPort = new SerialPort({
-                path: portInfo.path,
-                baudRate: 9600,
-                autoOpen: false,
-            });
+    const sensorPort = ports.find(p => p.vendorId === SENSOR_VENDOR_ID && p.productId === SENSOR_PRODUCT_ID);
 
-            await new Promise((resolve, reject) => {
-                testPort.open((err) => {
-                    if (err) return reject(err);
-                    resolve();
-                });
-            });
+    if (sensorPort) {
+        openPortAndListen(sensorPort.path);
+    } else {
+        await delay(2500)
+        findSensorPort()
+    }
 
-            const parser = testPort.pipe(new ReadlineParser({ delimiter: '\r\n' }));
+}
 
-            let timeout;
+async function openPortAndListen(portPath) {
 
-            const cleanup = () => {
-                clearTimeout(timeout);
-            };
+    if (activePort) {
+        activePort.close();
+        activePort = null;
+        activeParser = null;
+    }
 
-            const onData = (data) => {
-                if (data.includes('SENSOR_LUZ_BH1750')) {
+    const port = new SerialPort({ path: portPath, baudRate: 9600, autoOpen: false });
 
-                    console.log(` BOOT · Sensor encontrado en ${portInfo.path}`);
+    const parser = port.pipe(new ReadlineParser({ delimiter: '\r\n' }));
 
-                    activePort = testPort;
-                    cleanup();
-
-                    // Ya tenemos el puerto abierto: simplemente seguimos leyendo
-                    parser.removeListener('data', onData); // Eliminamos el listener temporal
-
-                    // Añadimos nuevo listener para datos reales
-                    parser.on('data', (data) => {
-                        if (data.includes('SENSOR_LUZ_BH1750')) return;
-
-                        const lux = parseFloat(data);
-                        if (!isNaN(lux)) {
-                            smoothSetBrightness(lux);
-                        } else {
-                            console.log(' SENSOR · Dato no válido:', data);
-                        }
-                    });
-
-                    activePort.on('close', () => {
-                        console.log(' SENSOR · Desconectado, buscando de nuevo...');
-                        activePort = null;
-                        reconnect();
-                    });
-
-                    testPort.on('error', (err) => {
-                        console.log(' SENSOR · Error:', err.message);
-                        testPort.close(); // Triggea el evento 'close'
-                    });
-
-                }
-            };
-
-            const onError = (err) => {
-                cleanup();
-                testPort.close();
-            };
-
-            parser.on('data', onData);
-            testPort.on('error', onError);
-
-            timeout = setTimeout(() => {
-                parser.off('data', onData);
-                testPort.close();
-            }, 3000);
-
-            // Salimos del bucle una vez que encontramos el sensor para evitar múltiples instancias
-
-        } catch (err) {
-            // No se pudo abrir puerto, ignoramos
+    port.open((err) => {
+        if (err) {
+            console.error(' BOOT · Error abriendo el puerto:', err.message);
+            scheduleReconnect();
+            return;
         }
-    }
+        console.log(' BOOT · Conexión establecida:', portPath);
+    });
 
-    if (!activePort) {
-        reconnect();
-    }
+    parser.on('data', (line) => {
+        const lux = parseFloat(line);
+        if (!isNaN(lux)) {
+            smoothSetBrightness(lux);
+        } else {
+            console.log(' SENSOR · Dato no reconocido:', line);
+        }
+    });
+
+    port.on('close', () => {
+        console.warn(' BOOT · Dispositivo desconectado, intentando reconectar...');
+        closeActivePort();
+        scheduleReconnect();
+    });
+
+    port.on('error', () => {
+        closeActivePort();
+        scheduleReconnect();
+    });
+
+    activePort = port;
+    activeParser = parser;
 
 }
 
-function reconnect(delay = 3000) {
-    if (reconnectTimeout) return;
-    reconnectTimeout = setTimeout(() => {
-        reconnectTimeout = null;
-        if (!activePort) findSensorPort();
-    }, delay);
+function closeActivePort() {
+    if (activePort) {
+        activePort.close();
+        activePort = null;
+        activeParser = null;
+    }
 }
 
-// Ejecutar escaneo
+function scheduleReconnect() {
+  if (reconnectTimeout) return;
+  reconnectTimeout = setTimeout(() => {
+    reconnectTimeout = null;
+    if (!activePort) findSensorPort();
+  }, 3000);
+}
+
 findSensorPort();
