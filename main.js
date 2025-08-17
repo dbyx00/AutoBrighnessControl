@@ -9,14 +9,15 @@ let activeParser = null;
 let reconnectTimeout = null;
 
 const SENSOR_VENDOR_ID = '';
-const SENSOR_PRODUCT_ID = '';
+const SENSOR_PRODUCT_ID = '';
+const SENSOR_SERIAL_NUMBER = '';
 
 async function findSensorPort() {
 
     console.log(' BOOT · Buscando sensor...');
 
     const ports = await SerialPort.list();
-    const sensorPort = ports.find(p => p.vendorId === SENSOR_VENDOR_ID && p.productId === SENSOR_PRODUCT_ID);
+    const sensorPort = ports.find(p => p.vendorId === SENSOR_VENDOR_ID && p.productId === SENSOR_PRODUCT_ID && p.serialNumber === SENSOR_SERIAL_NUMBER);
 
     if (sensorPort) {
         openPortAndListen(sensorPort.path);
