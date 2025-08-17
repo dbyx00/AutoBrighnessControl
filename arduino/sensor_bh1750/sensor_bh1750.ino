@@ -7,6 +7,7 @@ void setup() {
   Serial.begin(9600);
   Wire.begin();
   lightMeter.begin();
+  Serial.println("DBY_SENSOR_BH1750");
 }
 
 void loop() {
