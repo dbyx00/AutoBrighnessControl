@@ -1,4 +1,5 @@
 import { DisplayManager, VCPFeatureCode } from "@ddc-node/ddc-node";
+import { delay } from './utils.js';
 
 // Indica que hay una transición de brillo en curso.
 let waitForCompleteFlag = false;
@@ -70,15 +71,11 @@ async function smoothSetBrightness(lux, stepDelay = 30, stepSize = 1) {
             })
         );
 
-        await sleep(stepDelay);
+        await delay(stepDelay);
     }
 
     console.log(` BRILLO  · Transición completada a: ${targetValue}%`);
     waitForCompleteFlag = false;
-}
-
-function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export { smoothSetBrightness };

@@ -9,7 +9,7 @@ const DEVICE_SIGNATURE = "DBY_SENSOR_BH1750";
 let activePort = null;
 let reconnectTimeout = null;
 
-async function searchPorts(signature) {
+export async function searchPorts(signature, timeout = 2000) {
   const ports = await SerialPort.list();
 
   for (const portInfo of ports) {
@@ -17,6 +17,14 @@ async function searchPorts(signature) {
     const parser = portConnection.pipe(new ReadlineParser({ delimiter: '\r\n' }));
 
     const found = await new Promise((resolve) => {
+      let timer;
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        parser.removeAllListeners('data');
+        if (portConnection.isOpen) portConnection.close(() => {});
+      };
+
       portConnection.open((err) => {
         if (err) return resolve(false);
 
@@ -24,8 +32,24 @@ async function searchPorts(signature) {
 
         parser.once('data', (line) => {
           const match = line.trim() === signature;
-          resolve(match);
+          clearTimeout(timer);
+          parser.removeAllListeners('data');
+
+          if (match) {
+            // Puerto correcto: no cerramos la conexión
+            resolve(true);
+          } else {
+            // Firma incorrecta: cerramos el puerto
+            if (portConnection.isOpen) portConnection.close(() => resolve(false));
+            else resolve(false);
+          }
         });
+
+        // Timeout: puerto no responde
+        timer = setTimeout(() => {
+          if (portConnection.isOpen) portConnection.close(() => resolve(false));
+          else resolve(false);
+        }, timeout);
       });
     });
 
@@ -35,7 +59,7 @@ async function searchPorts(signature) {
     }
   }
 
-  return { port: null, portParser: null };
+  return { port: null, portParser: null };
 }
 
 async function initConnectionHandler(port, parser) {
